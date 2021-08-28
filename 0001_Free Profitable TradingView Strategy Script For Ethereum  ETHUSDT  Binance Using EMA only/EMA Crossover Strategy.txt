@@ -1,0 +1,45 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © doppelgunner
+
+//@version=4
+initial_capital = 10000
+percent_risk = input(2, "% Risk per trade (of equity)", minval=0, type=input.float, group="Risk Management Settings", tooltip="This is important for position sizing") / 100
+strategy("Algo Trading: Simple 3-EMA Strategy", overlay=true, initial_capital=initial_capital, commission_type=strategy.commission.percent, commission_value=0.08)
+ave_loss_percent = input(2, "% of average loss (backtesting)", minval=0, type=input.float, group="Risk Management Settings", tooltip="This is important for position sizing") / 100
+
+enter_long = input(true, "Enter Long?", type=input.bool, group="Backtest Settings")
+enter_short = input(false, "Enter Short?", type=input.bool, group="Backtest Settings")
+
+ema_fast_length = input(50, "EMA  Fast Length", minval=1, group="EMA Settings")
+ema_mid_length = input(100, "EMA  Mid Length", minval=1, group="EMA Settings")
+ema_slow_length = input(200, "EMA  Slow Length", minval=1, group="EMA Settings")
+
+ema_slow = ema(close, ema_slow_length)
+ema_mid = ema(close, ema_mid_length)
+ema_fast = ema(close, ema_fast_length)
+
+plot(ema_slow, "EMA Slow", color=color.black, linewidth=3)
+plot(ema_mid, "EMA Mid", color=color.red, linewidth=2)
+plot(ema_fast, "EMA Fast", color=color.blue, linewidth=1)
+
+buy = crossover(ema_fast, ema_mid) and close > ema_slow
+sell = crossunder(ema_fast, ema_mid) and close < ema_slow
+
+risk_money = strategy.equity * percent_risk
+stop_risk = abs(close - (close * ave_loss_percent))
+diffSR = abs(close - stop_risk)
+
+position_size = risk_money / diffSR
+
+strategy.entry("long", strategy.long, when=buy and enter_long, qty=position_size)
+strategy.close("long", when=sell)
+
+strategy.entry("short", strategy.short, when=sell and enter_short, qty=position_size)
+strategy.close("short", when=buy)
+
+inLong = strategy.position_size > 0
+inShort = strategy.position_size < 0
+notInTrade = strategy.position_size == 0
+
+showBGColor = input(true, "Show BG Color?", type=input.bool, group="Color Settings")
+bgcolor(notInTrade or (not showBGColor) ? color.white : inLong ? color.green : color.red)
