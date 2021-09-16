@@ -1,0 +1,101 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © doppelgunner
+
+//5m and 9m ETH/USDT - w/trailstop + enter long and short - little drawdown
+//BEST - btcusdt 10m - beats buy and hold
+
+//@version=4
+initial_capital = 10000
+percent_risk = input(2, "% Risk per trade (of equity)", minval=0, type=input.float, group="Risk Management Settings", tooltip="This is important for position sizing") / 100
+strategy("Algo Trading: Simple 3-EMA Strategy + Trailstop", overlay=true, initial_capital=initial_capital, commission_type=strategy.commission.percent, commission_value=0.04)
+ave_loss_percent = input(2, "% of average loss (backtesting)", minval=0, type=input.float, group="Risk Management Settings", tooltip="This is important for position sizing") / 100
+
+enter_long = input(true, "Enter Long?", type=input.bool, group="Backtest Settings")
+enter_short = input(true, "Enter Short?", type=input.bool, group="Backtest Settings")
+
+ema_fast_length = input(50, "EMA  Fast Length", minval=1, group="EMA Settings")
+ema_mid_length = input(100, "EMA  Mid Length", minval=1, group="EMA Settings")
+ema_slow_length = input(200, "EMA  Slow Length", minval=1, group="EMA Settings")
+
+atr_mul = input(5, "Multiplier", minval=1, group="ATR Settings")
+atr_length = input(14, "Length", minval=1, group="ATR Settings")
+atr_smoothing = input(title="Smoothing", defval="RMA", options=["RMA", "SMA", "EMA", "WMA"], group="ATR Settings")
+atr_ma_function(source, length) =>
+	if atr_smoothing == "RMA"
+		rma(source, length)
+	else
+		if atr_smoothing == "SMA"
+			sma(source, length)
+		else
+			if atr_smoothing == "EMA"
+				ema(source, length)
+			else
+				wma(source, length)
+				
+atr = atr_ma_function(tr(true), atr_length)
+
+ema_slow = ema(close, ema_slow_length)
+ema_mid = ema(close, ema_mid_length)
+ema_fast = ema(close, ema_fast_length)
+
+plot(ema_slow, "EMA Slow", color=color.black, linewidth=3)
+plot(ema_mid, "EMA Mid", color=color.red, linewidth=2)
+plot(ema_fast, "EMA Fast", color=color.blue, linewidth=1)
+
+buy = crossover(ema_fast, ema_mid) and close > ema_slow
+sell = crossunder(ema_fast, ema_mid) and close < ema_slow
+
+risk_money = strategy.equity * percent_risk
+stop_risk = abs(close - (close * ave_loss_percent))
+diffSR = abs(close - stop_risk)
+
+position_size = risk_money / diffSR
+
+strategy.entry("long", strategy.long, when=buy and enter_long, qty=position_size)
+strategy.close("long", when=sell)
+
+strategy.entry("short", strategy.short, when=sell and enter_short, qty=position_size)
+strategy.close("short", when=buy)
+
+inLong = strategy.position_size > 0
+inShort = strategy.position_size < 0
+notInTrade = strategy.position_size == 0
+
+use_trailstop = input(true, "Use trailstop?", type=input.bool, group="Backtest Settings")
+
+computeTrailstopLong() =>
+    longTrailstop = close - (atr_mul * atr)
+    
+computeTrailstopShort() =>
+    shortTrailstop = close + (atr_mul * atr)
+
+var float longTrailstop = na
+var float shortTrailstop = na
+
+if (buy and enter_long and use_trailstop)
+    longTrailstop := computeTrailstopLong()
+
+if (inLong and use_trailstop)
+    if (longTrailstop < computeTrailstopLong())
+        longTrailstop := computeTrailstopLong()
+    
+if (sell and enter_short and use_trailstop)
+    shortTrailstop := computeTrailstopShort()
+
+if (inShort and use_trailstop)
+    if (shortTrailstop > computeTrailstopShort())
+        shortTrailstop := computeTrailstopShort()
+
+strategy.exit("long", stop=longTrailstop, when=inLong or (buy and enter_long))
+strategy.exit("short", stop=shortTrailstop, when=inShort or (sell and enter_short))
+
+showBGColor = input(false, "Show BG Color?", type=input.bool, group="Color Settings")
+bgcolor(notInTrade or (not showBGColor) ? color.white : inLong ? color.green : color.red)
+
+ema_close = ema(close, 2)
+close_plot = plot(ema_close, "EMA Close", color=color.new(color.white, 100))
+long_trail_plot = plot(inLong ? longTrailstop : na, "Long Trail Stop", color=color.green, style=plot.style_linebr)
+short_trail_plot = plot(inShort ? shortTrailstop : na, "Short Trail Stop", color=color.red, style=plot.style_linebr)
+
+fill(close_plot, long_trail_plot, title="Trailstop Long", color=color.green)
+fill(close_plot, short_trail_plot, title="Trailstop Short", color=color.red)
