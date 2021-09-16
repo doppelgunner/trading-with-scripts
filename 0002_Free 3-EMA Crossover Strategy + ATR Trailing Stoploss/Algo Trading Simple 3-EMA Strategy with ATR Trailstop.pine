@@ -1,9 +1,6 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © doppelgunner
 
-//5m and 9m ETH/USDT - w/trailstop + enter long and short - little drawdown
-//BEST - btcusdt 10m - beats buy and hold
-
 //@version=4
 initial_capital = 10000
 percent_risk = input(2, "% Risk per trade (of equity)", minval=0, type=input.float, group="Risk Management Settings", tooltip="This is important for position sizing") / 100
